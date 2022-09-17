@@ -288,62 +288,9 @@ function unused() {
       ctx.scale(ratio, ratio);
       ctx.fillStyle = backgroundColor;
       ctx.fillRect(0, 0, width, height);
-      ctx.translate(width / 2, (height - splashIconPadding) / 2);
-
-      if (icon) {
-        // nb: on Chrome, we need the image >=48px, use the big layout >=80dp, ideal is >=128dp
-        let iconWidth = (icon.width / ratio);
-        let iconHeight = (icon.height / ratio);
-        if (iconHeight > idealSplashIconSize) {
-          // clamp to 128px height max
-          iconWidth /= (iconHeight / idealSplashIconSize);
-          iconHeight = idealSplashIconSize;
-        }
-
-        if (iconWidth >= minimumSplashIconSize && iconHeight >= minimumSplashIconSize) {
-          ctx.drawImage(icon, iconWidth / -2, iconHeight / -2, iconWidth, iconHeight);
-          ctx.translate(0, iconHeight / 2 + splashIconPadding);
-        }
-      }
-
-      ctx.fillStyle = backgroundIsLight ? 'white' : 'black';
-      ctx.font = `${defaultSplashTextSize}px ${defaultFontName}`;
-
-      // Set the user-requested font; if it's invalid, the set will fail.
-      const s = getComputedStyle(manifestEl);
-      ctx.font = s.getPropertyValue('--pwacompat-splash-font'); // blank for old browsers
-
-      const title = manifest['name'] || manifest['short_name'] || document.title;
-      const measure = ctx.measureText(title);
-      const textHeight = (measure.actualBoundingBoxAscent || defaultSplashTextSize);
-      ctx.translate(0, textHeight);
-
-      if (measure.width < width * 0.8) {
-        // short-circuit, just draw entire string
-        ctx.fillText(title, measure.width / -2, 0);
-      } else {
-        // longer wrap case, draw once we have >0.7 width accumulated
-        const words = title.split(/\s+/g);
-        for (let i = 1; i <= words.length; ++i) {
-          const cand = words.slice(0, i).join(' ');
-          const measureWidth = ctx.measureText(cand).width;
-          if (i === words.length || measureWidth > width * 0.6) {
-            // render accumulated words
-            ctx.fillText(cand, measureWidth / -2, 0);
-            ctx.translate(0, textHeight * 1.2);
-            words.splice(0, i);
-            i = 0;
-          }
-        }
-      }
 
       return () => {
         const data = ctx.canvas.toDataURL();
-        if (debug) {
-          const img = document.createElement('img');
-          img.src = data;
-          document.body.append(img);
-        }
         appendSplash(orientation, data);
         return data;
       };
@@ -402,63 +349,13 @@ function unused() {
       }, 10);
     }
 
-    // fetches and redraws any remaining icons in appleTouchIcons (to have proper bg)
-    function redrawRemainingIcons(done) {
-      let left = appleTouchIcons.length + 1;
-      const check = () => {
-        if (!--left) {
-          done();
-        }
-      };
-      check();
-      appleTouchIcons.forEach((icon) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onerror = check;
-        img.onload = () => {
-          img.onload = null;
-          icon.href = updateTransparent(img, backgroundColor, true);
-          update['i'][img.src] = icon.href;
-          check();
-        };
-        img.src = icon.href;
-      });
-    }
-
     // write the update to sessionStorage
     function saveUpdate() {
       store('iOS', JSON.stringify(update));
     }
 
-    // called repeatedly until a valid icon is found
-    function fetchIconAndBuildSplash() {
-      const icon = appleTouchIcons.shift();
-      if (!icon) {
-        renderBothSplash(null, saveUpdate);  // ran out of icons, render without one
-        return;
-      }
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onerror = () => void fetchIconAndBuildSplash();  // try again
-      img.onload = () => {
-        img.onload = null;  // iOS Safari might call this many times
-        renderBothSplash(img, () => {
-          // ... if the icon used for splash changed, redraw others too
-          const redrawn = manifest['background_color'] && updateTransparent(img, backgroundColor);
-          if (redrawn) {
-            icon.href = redrawn;
-            update['i'][img.src] = redrawn;
-            redrawRemainingIcons(saveUpdate);
-          } else {
-            saveUpdate();
-          }
-        });
-      };
-
-      img.src = icon.href;  // trigger load
-    }
-    fetchIconAndBuildSplash();
+    //Render splash screen with background color from manifest
+    renderBothSplash(null, saveUpdate);
   }
 
   function findAppleId(related) {
